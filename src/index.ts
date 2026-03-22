@@ -1,8 +1,7 @@
 import { serve } from "bun";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import webpush from "web-push";
-import index from "./index.html";
 import {
   getTimelineByViewToken,
   getUserByPostToken,
@@ -18,6 +17,13 @@ import {
   removePushSubscription,
   getSubscriptionsForTimeline,
 } from "./db";
+
+const isProduction = process.env.NODE_ENV === "production";
+const DIST_DIR = join(import.meta.dir, "..", "dist");
+
+// In development, use Bun's HTML import for HMR/bundling
+// In production, serve prebuilt files from dist/
+const index = isProduction ? null : (await import("./index.html")).default;
 
 const vapidKeys = getOrCreateVapidKeys();
 webpush.setVapidDetails(
@@ -230,10 +236,21 @@ const server = serve({
     },
 
     // SPA fallback: serve index.html for all non-API routes
-    "/*": index,
+    "/*": isProduction
+      ? async (req) => {
+          const url = new URL(req.url);
+          const requested = resolve(DIST_DIR, url.pathname.slice(1));
+          // Serve static dist assets if they exist, otherwise SPA fallback
+          if (requested.startsWith(DIST_DIR)) {
+            const file = Bun.file(requested);
+            if (await file.exists()) return new Response(file);
+          }
+          return new Response(Bun.file(join(DIST_DIR, "index.html")));
+        }
+      : index,
   },
 
-  development: process.env.NODE_ENV !== "production" && {
+  development: !isProduction && {
     hmr: true,
     console: true,
   },
