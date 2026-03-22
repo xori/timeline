@@ -67,7 +67,7 @@ export async function compressVideo(file: File, onProgress?: ProgressCallback): 
     ff.on("log", ({ message }) => {
       console.log("[ffmpeg]", message);
       const durMatch = message.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/);
-      if (durMatch) {
+      if (durMatch && durMatch[1] && durMatch[2] && durMatch[3]) {
         duration = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
       }
     });
@@ -122,7 +122,7 @@ export async function compressVideo(file: File, onProgress?: ProgressCallback): 
       return file;
     }
 
-    const blob = new Blob([outputBytes], { type: "video/webm" });
+    const blob = new Blob([outputBytes as BlobPart], { type: "video/webm" });
     const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".webm"), {
       type: "video/webm",
     });
@@ -151,6 +151,7 @@ export async function compressFiles(files: File[], onProgress?: ProgressCallback
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
+    if (!file) continue;
     if (file.type.startsWith("image/")) {
       onProgress?.(`Compressing image ${i + 1}/${total}...`);
       results.push(await compressImage(file));

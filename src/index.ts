@@ -23,7 +23,7 @@ const DIST_DIR = join(import.meta.dir, "..", "dist");
 
 // In development, use Bun's HTML import for HMR/bundling
 // In production, serve prebuilt files from dist/
-const index = isProduction ? null : (await import("./index.html")).default;
+const index = isProduction ? undefined : (await import("./index.html")).default;
 
 const vapidKeys = getOrCreateVapidKeys();
 webpush.setVapidDetails(
@@ -244,7 +244,7 @@ const server = serve({
 
     // SPA fallback: serve index.html for all non-API routes
     "/*": isProduction
-      ? async (req) => {
+      ? async (req: Request) => {
           const url = new URL(req.url);
           const requested = resolve(DIST_DIR, url.pathname.slice(1));
           // Serve static dist assets if they exist, otherwise SPA fallback
@@ -254,7 +254,7 @@ const server = serve({
           }
           return new Response(Bun.file(join(DIST_DIR, "index.html")));
         }
-      : index,
+      : index!,
   },
 
   development: !isProduction && {

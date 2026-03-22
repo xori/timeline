@@ -9,17 +9,17 @@ if (args.length < 2) {
   process.exit(1);
 }
 
-const [timelineName, ...userNames] = args;
+const [timelineName, ...userNames] = args as [string, ...string[]];
 
 const viewToken = randomUUIDv7();
-const timeline = createTimeline(timelineName, viewToken);
+const timeline = createTimeline(timelineName!, viewToken);
 
 console.log(`\nTimeline: ${timelineName}`);
 console.log(`View URL: /t/${viewToken}\n`);
 
 userNames.forEach((name, i) => {
   const postToken = randomUUIDv7();
-  createUser(timeline.id, name, postToken, COLORS[i % COLORS.length]);
+  createUser(timeline.id, name, postToken, COLORS[i % COLORS.length]!);
   console.log(`${name}: /p/${postToken}`);
 });
 
