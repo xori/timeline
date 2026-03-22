@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { PostCard } from "./PostCard";
 import { PostForm } from "./PostForm";
 
@@ -12,38 +12,69 @@ export function Timeline({ viewToken, postToken }: Props) {
   const [timelineName, setTimelineName] = useState("");
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pushSupported, setPushSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [effectiveViewToken, setEffectiveViewToken] = useState(viewToken || "");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
+  const resolveViewToken = useCallback(async (): Promise<string | null> => {
+    if (postToken) {
+      const userRes = await fetch(`/api/user/${postToken}`);
+      if (!userRes.ok) { setError("Invalid link"); setLoading(false); return null; }
+      const userData = await userRes.json();
+      setUser(userData.user);
+      setTimelineName(userData.user.timeline_name);
+      return userData.user.view_token;
+    } else if (viewToken) {
+      return viewToken;
+    }
+    return null;
+  }, [viewToken, postToken]);
+
+  const fetchPage = useCallback(async (vt: string, cursor?: string) => {
+    const params = new URLSearchParams({ limit: "20" });
+    if (cursor) params.set("cursor", cursor);
+    const res = await fetch(`/api/timeline/${vt}?${params}`);
+    if (!res.ok) throw new Error("Timeline not found");
+    return res.json();
+  }, []);
+
+  // Initial load
   const fetchData = useCallback(async () => {
     try {
-      if (postToken) {
-        const userRes = await fetch(`/api/user/${postToken}`);
-        if (!userRes.ok) { setError("Invalid link"); setLoading(false); return; }
-        const userData = await userRes.json();
-        setUser(userData.user);
-        setTimelineName(userData.user.timeline_name);
-
-        const timelineRes = await fetch(`/api/timeline/${userData.user.view_token}`);
-        if (!timelineRes.ok) { setError("Timeline not found"); setLoading(false); return; }
-        const timelineData = await timelineRes.json();
-        setPosts(timelineData.posts);
-      } else if (viewToken) {
-        const res = await fetch(`/api/timeline/${viewToken}`);
-        if (!res.ok) { setError("Invalid link"); setLoading(false); return; }
-        const data = await res.json();
-        setPosts(data.posts);
-        setTimelineName(data.timeline.name);
-      }
+      const vt = await resolveViewToken();
+      if (!vt) return;
+      const data = await fetchPage(vt);
+      setPosts(data.posts);
+      setNextCursor(data.nextCursor);
+      if (!postToken) setTimelineName(data.timeline.name);
     } catch {
       setError("Failed to load timeline");
     } finally {
       setLoading(false);
     }
-  }, [viewToken, postToken]);
+  }, [resolveViewToken, fetchPage, postToken]);
+
+  // Load more pages
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    const vt = effectiveViewToken || viewToken;
+    if (!vt) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchPage(vt, nextCursor);
+      setPosts((prev) => [...prev, ...data.posts]);
+      setNextCursor(data.nextCursor);
+    } catch {
+      // silently fail, user can scroll again
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, effectiveViewToken, viewToken, fetchPage]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -51,6 +82,29 @@ export function Timeline({ viewToken, postToken }: Props) {
   useEffect(() => {
     if (user?.view_token) setEffectiveViewToken(user.view_token);
   }, [user]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  // Refresh after posting — reload from scratch to get the new post at the top
+  const handlePostCreated = useCallback(async () => {
+    const vt = effectiveViewToken || viewToken;
+    if (!vt) return;
+    const data = await fetchPage(vt);
+    setPosts(data.posts);
+    setNextCursor(data.nextCursor);
+  }, [effectiveViewToken, viewToken, fetchPage]);
 
   // Check push notification support and existing subscription
   useEffect(() => {
@@ -112,7 +166,7 @@ export function Timeline({ viewToken, postToken }: Props) {
   const handleDelete = async (postId: number) => {
     if (!postToken) return;
     const res = await fetch(`/api/posts/${postToken}/${postId}`, { method: "DELETE" });
-    if (res.ok) fetchData();
+    if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== postId));
   };
 
   if (loading) {
@@ -162,7 +216,7 @@ export function Timeline({ viewToken, postToken }: Props) {
           <PostForm
             postToken={postToken}
             userName={user.name}
-            onPostCreated={fetchData}
+            onPostCreated={handlePostCreated}
           />
         )}
         {posts.length === 0 ? (
@@ -176,6 +230,10 @@ export function Timeline({ viewToken, postToken }: Props) {
               onDelete={handleDelete}
             />
           ))
+        )}
+        <div ref={sentinelRef} className="h-1" />
+        {loadingMore && (
+          <p className="text-center text-gray-400 py-4">Loading more...</p>
         )}
       </main>
     </div>

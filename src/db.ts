@@ -75,13 +75,26 @@ export function getUserByPostToken(postToken: string) {
   `).get(postToken) as any;
 }
 
-export function getTimelinePosts(timelineId: number) {
+export function getTimelinePosts(timelineId: number, limit = 20, cursor?: string) {
+  if (cursor) {
+    // cursor format: "created_at|id"
+    const [cursorDate, cursorId] = cursor.split("|") as [string, string];
+    return db.query(`
+      SELECT p.*, u.name as user_name, u.avatar_color
+      FROM posts p JOIN users u ON p.user_id = u.id
+      WHERE p.timeline_id = ?
+        AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT ?
+    `).all(timelineId, cursorDate, cursorDate, Number(cursorId), limit) as any[];
+  }
   return db.query(`
     SELECT p.*, u.name as user_name, u.avatar_color
     FROM posts p JOIN users u ON p.user_id = u.id
     WHERE p.timeline_id = ?
-    ORDER BY p.created_at DESC
-  `).all(timelineId) as any[];
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT ?
+  `).all(timelineId, limit) as any[];
 }
 
 export function getPostMedia(postId: number) {

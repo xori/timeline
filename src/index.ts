@@ -63,12 +63,18 @@ const server = serve({
       async GET(req) {
         const timeline = getTimelineByViewToken(req.params.viewToken);
         if (!timeline) return new Response("Not found", { status: 404 });
-        const posts = getTimelinePosts(timeline.id);
+        const url = new URL(req.url);
+        const limit = Math.min(Number(url.searchParams.get("limit")) || 20, 100);
+        const cursor = url.searchParams.get("cursor") || undefined;
+        const posts = getTimelinePosts(timeline.id, limit, cursor);
         const postsWithMedia = posts.map((p) => ({
           ...p,
           media: getPostMedia(p.id),
         }));
-        return Response.json({ timeline, posts: postsWithMedia });
+        const nextCursor = posts.length === limit
+          ? `${posts[posts.length - 1].created_at}|${posts[posts.length - 1].id}`
+          : null;
+        return Response.json({ timeline, posts: postsWithMedia, nextCursor });
       },
     },
 
