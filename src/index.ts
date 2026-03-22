@@ -26,7 +26,7 @@ webpush.setVapidDetails(
   vapidKeys.privateKey,
 );
 
-const UPLOADS_DIR = join(import.meta.dir, "..", "uploads");
+const UPLOADS_DIR = join(import.meta.dir, "..", "data", "uploads");
 mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const FFMPEG_CORE_DIR = join(
