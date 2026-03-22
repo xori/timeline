@@ -163,14 +163,15 @@ const server = serve({
     "/ffmpeg/*": async (req) => {
       const url = new URL(req.url);
       const filename = url.pathname.replace("/ffmpeg/", "");
+      const cacheHeaders = { "Cache-Control": "public, max-age=31536000, immutable" };
       if (filename === "ffmpeg-core.wasm") {
         return new Response(Bun.file(join(FFMPEG_CORE_DIR, filename)), {
-          headers: { "Content-Type": "application/wasm" },
+          headers: { "Content-Type": "application/wasm", ...cacheHeaders },
         });
       }
       if (filename === "ffmpeg-core.js") {
         return new Response(Bun.file(join(FFMPEG_CORE_DIR, filename)), {
-          headers: { "Content-Type": "text/javascript" },
+          headers: { "Content-Type": "text/javascript", ...cacheHeaders },
         });
       }
       // Serve ESM modules (worker.js, errors.js, const.js, etc.)
@@ -178,7 +179,7 @@ const server = serve({
         const file = Bun.file(join(FFMPEG_ESM_DIR, filename));
         if (await file.exists()) {
           return new Response(file, {
-            headers: { "Content-Type": "text/javascript" },
+            headers: { "Content-Type": "text/javascript", ...cacheHeaders },
           });
         }
       }
