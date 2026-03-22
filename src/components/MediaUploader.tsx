@@ -90,7 +90,7 @@ export function MediaUploader({ mediaFiles, setMediaFiles }: Props) {
           ref={inputRef}
           type="file"
           multiple
-          accept="image/*,video/*"
+          accept="*/*"
           className="hidden"
           onChange={(e) => {
             if (e.target.files) addFiles(e.target.files);
