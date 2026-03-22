@@ -44,6 +44,23 @@ db.run(`CREATE TABLE IF NOT EXISTS media (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
+db.run(`CREATE TABLE IF NOT EXISTS vapid_keys (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  public_key TEXT NOT NULL,
+  private_key TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+
+db.run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timeline_id INTEGER NOT NULL REFERENCES timelines(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  key_p256dh TEXT NOT NULL,
+  key_auth TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(timeline_id, endpoint)
+)`);
+
 // Query helpers
 
 export function getTimelineByViewToken(viewToken: string) {
@@ -113,6 +130,32 @@ export function getAllTimelinesWithUsers() {
     ...t,
     users: db.query("SELECT * FROM users WHERE timeline_id = ?").all(t.id) as any[],
   }));
+}
+
+export function getOrCreateVapidKeys() {
+  const existing = db.query("SELECT * FROM vapid_keys WHERE id = 1").get() as any;
+  if (existing) return { publicKey: existing.public_key, privateKey: existing.private_key };
+
+  const webpush = require("web-push");
+  const keys = webpush.generateVAPIDKeys();
+  db.query("INSERT INTO vapid_keys (id, public_key, private_key) VALUES (1, ?, ?)").run(keys.publicKey, keys.privateKey);
+  return keys;
+}
+
+export function addPushSubscription(timelineId: number, endpoint: string, p256dh: string, auth: string) {
+  return db.query(`
+    INSERT INTO push_subscriptions (timeline_id, endpoint, key_p256dh, key_auth)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(timeline_id, endpoint) DO UPDATE SET key_p256dh = excluded.key_p256dh, key_auth = excluded.key_auth
+  `).run(timelineId, endpoint, p256dh, auth);
+}
+
+export function removePushSubscription(timelineId: number, endpoint: string) {
+  return db.query("DELETE FROM push_subscriptions WHERE timeline_id = ? AND endpoint = ?").run(timelineId, endpoint);
+}
+
+export function getSubscriptionsForTimeline(timelineId: number) {
+  return db.query("SELECT * FROM push_subscriptions WHERE timeline_id = ?").all(timelineId) as any[];
 }
 
 export default db;
