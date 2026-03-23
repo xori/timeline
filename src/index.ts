@@ -125,10 +125,14 @@ const server = serve({
         // Fire-and-forget push notifications
         const subs = getSubscriptionsForTimeline(user.timeline_id);
         if (subs.length > 0) {
+          const notifBody = body.trim()
+            ? `${user.name}: ${body.slice(0, 100)}${body.length > 100 ? "..." : ""}`
+            : `${user.name} shared ${files.length > 1 ? `${files.length} files` : files[0]?.type?.startsWith("video/") ? "a video" : "a photo"}`;
           const payload = JSON.stringify({
             title: user.timeline_name,
-            body: `${user.name}: ${body.slice(0, 100)}${body.length > 100 ? "..." : ""}`,
-            url: `/t/${user.view_token}/post/${post.id}`,
+            body: notifBody,
+            tag: `timeline-${user.timeline_id}`,
+            url: `/t/${user.view_token}`,
           });
           Promise.allSettled(
             subs.map((sub) =>
