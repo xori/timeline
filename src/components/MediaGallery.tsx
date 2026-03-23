@@ -26,11 +26,12 @@ export function MediaGallery({ media }: { media: MediaItem[] }) {
       ))}
       {images.length > 0 && (
         <div className={`grid gap-2 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-          {images.map((item) => {
+          {images.map((item, index) => {
             const src = `/uploads/${item.filename}`;
             const popoverId = `media-popover-${item.id}`;
+            const isAlone = images.length === 1 || (images.length % 2 === 1 && index === images.length - 1);
             return (
-              <div key={item.id}>
+              <div key={item.id} className={isAlone ? "col-span-full" : ""}>
                 <button
                   // @ts-ignore: popoverTarget not yet in React types
                   popoverTarget={popoverId}
@@ -40,7 +41,7 @@ export function MediaGallery({ media }: { media: MediaItem[] }) {
                     src={src}
                     alt={item.original_name}
                     loading="lazy"
-                    className="w-full rounded-lg aspect-square object-cover hover:opacity-90 transition-opacity"
+                    className={`w-full rounded-lg hover:opacity-90 transition-opacity ${isAlone ? "h-auto object-contain" : "aspect-square object-cover"}`}
                   />
                 </button>
                 <div
