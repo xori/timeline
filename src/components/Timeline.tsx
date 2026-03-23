@@ -5,9 +5,10 @@ import { PostForm } from "./PostForm";
 interface Props {
   viewToken?: string;
   postToken?: string;
+  focusPostId?: number;
 }
 
-export function Timeline({ viewToken, postToken }: Props) {
+export function Timeline({ viewToken, postToken, focusPostId }: Props) {
   const [posts, setPosts] = useState<any[]>([]);
   const [timelineName, setTimelineName] = useState("");
   const [user, setUser] = useState<any>(null);
@@ -48,7 +49,21 @@ export function Timeline({ viewToken, postToken }: Props) {
     try {
       const vt = await resolveViewToken();
       if (!vt) return;
-      const data = await fetchPage(vt);
+
+      let data;
+      if (focusPostId) {
+        // Fetch all posts from newest down to the focused post
+        const params = new URLSearchParams({ until_post: String(focusPostId) });
+        const res = await fetch(`/api/timeline/${vt}?${params}`);
+        if (!res.ok) throw new Error("Timeline not found");
+        data = await res.json();
+        // If the post wasn't found (empty result), fall back to normal load
+        if (data.posts.length === 0) {
+          data = await fetchPage(vt);
+        }
+      } else {
+        data = await fetchPage(vt);
+      }
       setPosts(data.posts);
       setNextCursor(data.nextCursor);
       if (!postToken) setTimelineName(data.timeline.name);
@@ -57,7 +72,7 @@ export function Timeline({ viewToken, postToken }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [resolveViewToken, fetchPage, postToken]);
+  }, [resolveViewToken, fetchPage, postToken, focusPostId]);
 
   // Load more pages
   const loadMore = useCallback(async () => {
@@ -77,6 +92,20 @@ export function Timeline({ viewToken, postToken }: Props) {
   }, [nextCursor, loadingMore, effectiveViewToken, viewToken, fetchPage]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Scroll to focused post after load
+  useEffect(() => {
+    if (!focusPostId || loading || posts.length === 0) return;
+    const el = document.getElementById(`post-${focusPostId}`);
+    if (el) {
+      // Small delay to ensure layout is settled
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-blue-400", "ring-offset-2");
+        setTimeout(() => el.classList.remove("ring-2", "ring-blue-400", "ring-offset-2"), 3000);
+      });
+    }
+  }, [focusPostId, loading, posts]);
 
   // Set effectiveViewToken from user data when using postToken route
   useEffect(() => {
@@ -228,6 +257,7 @@ export function Timeline({ viewToken, postToken }: Props) {
               post={post}
               canDelete={!!user && post.user_id === user.id}
               onDelete={handleDelete}
+              shareToken={effectiveViewToken || viewToken}
             />
           ))
         )}

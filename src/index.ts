@@ -11,6 +11,7 @@ import {
   createMedia,
   deletePost,
   getPost,
+  getPostsUntilPost,
   getAllTimelinesWithUsers,
   getOrCreateVapidKeys,
   addPushSubscription,
@@ -64,6 +65,18 @@ const server = serve({
         const timeline = getTimelineByViewToken(req.params.viewToken);
         if (!timeline) return new Response("Not found", { status: 404 });
         const url = new URL(req.url);
+
+        // If until_post is set, fetch all posts from newest down to that post
+        const untilPost = url.searchParams.get("until_post");
+        if (untilPost) {
+          const posts = getPostsUntilPost(timeline.id, Number(untilPost));
+          if (!posts) return Response.json({ timeline, posts: [], nextCursor: null });
+          const postsWithMedia = posts.map((p) => ({ ...p, media: getPostMedia(p.id) }));
+          const lastPost = posts[posts.length - 1];
+          const nextCursor = `${lastPost.created_at}|${lastPost.id}`;
+          return Response.json({ timeline, posts: postsWithMedia, nextCursor });
+        }
+
         const limit = Math.min(Number(url.searchParams.get("limit")) || 20, 100);
         const cursor = url.searchParams.get("cursor") || undefined;
         const posts = getTimelinePosts(timeline.id, limit, cursor);
@@ -115,7 +128,7 @@ const server = serve({
           const payload = JSON.stringify({
             title: user.timeline_name,
             body: `${user.name}: ${body.slice(0, 100)}${body.length > 100 ? "..." : ""}`,
-            url: `/t/${user.view_token}`,
+            url: `/t/${user.view_token}/post/${post.id}`,
           });
           Promise.allSettled(
             subs.map((sub) =>

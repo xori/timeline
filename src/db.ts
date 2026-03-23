@@ -125,6 +125,19 @@ export function getPost(postId: number) {
   return db.query("SELECT * FROM posts WHERE id = ?").get(postId) as any;
 }
 
+export function getPostsUntilPost(timelineId: number, postId: number) {
+  // Fetch all posts from newest down to and including the target post
+  const target = db.query("SELECT created_at FROM posts WHERE id = ? AND timeline_id = ?").get(postId, timelineId) as any;
+  if (!target) return null;
+  return db.query(`
+    SELECT p.*, u.name as user_name, u.avatar_color
+    FROM posts p JOIN users u ON p.user_id = u.id
+    WHERE p.timeline_id = ?
+      AND (p.created_at > ? OR (p.created_at = ? AND p.id >= ?))
+    ORDER BY p.created_at DESC, p.id DESC
+  `).all(timelineId, target.created_at, target.created_at, postId) as any[];
+}
+
 export function createTimeline(name: string, viewToken: string) {
   return db.query(
     "INSERT INTO timelines (name, view_token) VALUES (?, ?) RETURNING *"
