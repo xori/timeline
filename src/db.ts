@@ -125,6 +125,14 @@ export function getPost(postId: number) {
   return db.query("SELECT * FROM posts WHERE id = ?").get(postId) as any;
 }
 
+export function getPostWithUser(postId: number) {
+  return db.query(`
+    SELECT p.*, u.name as user_name, u.avatar_color
+    FROM posts p JOIN users u ON p.user_id = u.id
+    WHERE p.id = ?
+  `).get(postId) as any;
+}
+
 export function getPostsUntilPost(timelineId: number, postId: number) {
   // Fetch all posts from newest down to and including the target post
   const target = db.query("SELECT created_at FROM posts WHERE id = ? AND timeline_id = ?").get(postId, timelineId) as any;

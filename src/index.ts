@@ -11,6 +11,7 @@ import {
   createMedia,
   deletePost,
   getPost,
+  getPostWithUser,
   getPostsUntilPost,
   getAllTimelinesWithUsers,
   getOrCreateVapidKeys,
@@ -35,6 +36,10 @@ webpush.setVapidDetails(
 
 const UPLOADS_DIR = join(import.meta.dir, "..", "data", "uploads");
 mkdirSync(UPLOADS_DIR, { recursive: true });
+
+function escapeAttr(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 const FFMPEG_CORE_DIR = join(
   import.meta.dir,
@@ -248,6 +253,47 @@ const server = serve({
         removePushSubscription(timeline.id, endpoint);
         return Response.json({ ok: true });
       },
+    },
+
+    // OG meta tags for post link previews
+    "/t/:viewToken/post/:postId": async (req) => {
+      // In dev, fetch from our own server to get Bun-bundled HTML (the /* catch-all).
+      // In prod, read the pre-built dist file directly.
+      let html: string;
+      if (isProduction) {
+        html = await Bun.file(join(DIST_DIR, "index.html")).text();
+      } else {
+        const res = await fetch(new URL("/", req.url));
+        html = await res.text();
+      }
+
+      const timeline = getTimelineByViewToken(req.params.viewToken);
+      if (!timeline) return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      const post = getPostWithUser(Number(req.params.postId));
+      if (!post || post.timeline_id !== timeline.id) return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+
+      const media = getPostMedia(post.id);
+      const firstImage = media.find((m: any) => m.mime_type?.startsWith("image/"));
+      const origin = new URL(req.url).origin;
+
+      const description = post.body?.trim()
+        ? `${post.user_name}: ${post.body.slice(0, 200)}`
+        : `${post.user_name} shared ${media.length > 1 ? `${media.length} files` : firstImage ? "a photo" : "a video"}`;
+
+      const ogTags = [
+        `<meta property="og:title" content="${escapeAttr(timeline.name)}" />`,
+        `<meta property="og:description" content="${escapeAttr(description)}" />`,
+        `<meta property="og:url" content="${origin}/t/${timeline.view_token}/post/${post.id}" />`,
+        `<meta property="og:type" content="article" />`,
+        firstImage && `<meta property="og:image" content="${origin}/uploads/${firstImage.filename}" />`,
+        `<meta name="twitter:card" content="${firstImage ? "summary_large_image" : "summary"}" />`,
+      ].filter(Boolean).join("\n    ");
+
+      const injected = html.replace("</head>", `    ${ogTags}\n  </head>`);
+
+      return new Response(injected, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     },
 
     "/sw.js": async () => {
