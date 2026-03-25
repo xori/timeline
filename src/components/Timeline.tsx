@@ -25,7 +25,11 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
   const resolveViewToken = useCallback(async (): Promise<string | null> => {
     if (postToken) {
       const userRes = await fetch(`/api/user/${postToken}`);
-      if (!userRes.ok) { setError("Invalid link"); setLoading(false); return null; }
+      if (!userRes.ok) {
+        setError("Invalid link");
+        setLoading(false);
+        return null;
+      }
       const userData = await userRes.json();
       setUser(userData.user);
       setTimelineName(userData.user.timeline_name);
@@ -91,7 +95,9 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
     }
   }, [nextCursor, loadingMore, effectiveViewToken, viewToken, fetchPage]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Scroll to focused post after load
   useEffect(() => {
@@ -102,7 +108,10 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
       requestAnimationFrame(() => {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.add("ring-2", "ring-blue-400", "ring-offset-2");
-        setTimeout(() => el.classList.remove("ring-2", "ring-blue-400", "ring-offset-2"), 3000);
+        setTimeout(
+          () => el.classList.remove("ring-2", "ring-blue-400", "ring-offset-2"),
+          3000,
+        );
       });
     }
   }, [focusPostId, loading, posts]);
@@ -194,7 +203,9 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
 
   const handleDelete = async (postId: number) => {
     if (!postToken) return;
-    const res = await fetch(`/api/posts/${postToken}/${postId}`, { method: "DELETE" });
+    const res = await fetch(`/api/posts/${postToken}/${postId}`, {
+      method: "DELETE",
+    });
     if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== postId));
   };
 
@@ -227,7 +238,12 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
             </a>
           )}
         </div>
-        <h1 className="text-lg font-semibold text-gray-800 text-center flex-1">{timelineName}</h1>
+        <h1
+          className="text-lg font-semibold text-gray-800 text-center flex-1 cursor-pointer"
+          onClick={() => window.location.reload()}
+        >
+          {timelineName}
+        </h1>
         <div className="w-24 flex justify-end">
           {pushSupported && (
             <button
