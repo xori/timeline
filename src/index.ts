@@ -219,7 +219,9 @@ const server = serve({
       const filePath = join(UPLOADS_DIR, url.pathname.replace("/uploads/", ""));
       const file = Bun.file(filePath);
       if (await file.exists()) {
-        return new Response(file);
+        return new Response(file, {
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        });
       }
       return new Response("Not found", { status: 404 });
     },
