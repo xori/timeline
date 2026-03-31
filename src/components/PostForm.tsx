@@ -12,22 +12,21 @@ export function PostForm({ postToken, userName, onPostCreated }: Props) {
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const compressing = mediaFiles.some((mf) => !mf.compressed);
-  const hasContent = body.trim() || mediaFiles.length > 0;
+  const pending = mediaFiles.some((mf) => !mf.staged && mf.status !== "upload failed");
+  const hasContent = body.trim() || mediaFiles.some((mf) => mf.staged);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasContent || compressing) return;
+    if (!hasContent || pending) return;
 
     setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append("body", body.trim());
-      for (const mf of mediaFiles) {
-        if (mf.compressed) {
-          formData.append("files", mf.compressed);
-        }
-      }
+      formData.append(
+        "staged_files",
+        JSON.stringify(mediaFiles.filter((mf) => mf.staged).map((mf) => mf.staged))
+      );
 
       const res = await fetch(`/api/posts/${postToken}`, {
         method: "POST",
@@ -57,14 +56,14 @@ export function PostForm({ postToken, userName, onPostCreated }: Props) {
         rows={3}
       />
       <div className="mt-2">
-        <MediaUploader mediaFiles={mediaFiles} setMediaFiles={setMediaFiles} />
+        <MediaUploader mediaFiles={mediaFiles} setMediaFiles={setMediaFiles} postToken={postToken} />
       </div>
       <button
         type="submit"
-        disabled={submitting || !hasContent || compressing}
+        disabled={submitting || !hasContent || pending}
         className="mt-3 w-full bg-blue-500 text-white text-sm font-medium py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {submitting ? "Posting..." : compressing ? "Compressing media..." : "Post"}
+        {submitting ? "Posting..." : pending ? "Uploading media..." : "Post"}
       </button>
     </form>
   );

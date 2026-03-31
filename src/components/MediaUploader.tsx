@@ -1,16 +1,25 @@
 import React, { useRef, useState, useCallback } from "react";
 import { compressImage, compressVideo, type ProgressCallback } from "../lib/compress";
 
+export interface StagedFile {
+  filename: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
 export interface MediaFile {
   id: number;
   original: File;
   compressed: File | null; // null = still compressing
-  status: string; // "compressing", "done", or progress text
+  staged: StagedFile | null; // null = still uploading
+  status: string; // "compressing", "uploading", progress text, "done", "upload failed"
 }
 
 interface Props {
   mediaFiles: MediaFile[];
   setMediaFiles: React.Dispatch<React.SetStateAction<MediaFile[]>>;
+  postToken: string;
 }
 
 let nextId = 0;
@@ -25,7 +34,7 @@ async function compressSingle(file: File, onProgress: ProgressCallback): Promise
   return file;
 }
 
-export function MediaUploader({ mediaFiles, setMediaFiles }: Props) {
+export function MediaUploader({ mediaFiles, setMediaFiles, postToken }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -40,28 +49,42 @@ export function MediaUploader({ mediaFiles, setMediaFiles }: Props) {
         id: nextId++,
         original: f,
         compressed: null,
+        staged: null,
         status: "compressing",
       }));
 
       setMediaFiles((prev) => [...prev, ...entries]);
 
-      // Kick off compression for each file
       for (const entry of entries) {
         const fileId = entry.id;
         compressSingle(entry.original, (status) => {
           setMediaFiles((prev) =>
             prev.map((mf) => (mf.id === fileId ? { ...mf, status } : mf))
           );
-        }).then((compressed) => {
-          setMediaFiles((prev) =>
-            prev.map((mf) =>
-              mf.id === fileId ? { ...mf, compressed, status: "done" } : mf
-            )
-          );
-        });
+        })
+          .then(async (compressed) => {
+            setMediaFiles((prev) =>
+              prev.map((mf) => (mf.id === fileId ? { ...mf, compressed, status: "uploading" } : mf))
+            );
+
+            try {
+              const fd = new FormData();
+              fd.append("file", compressed);
+              const res = await fetch(`/api/stage-upload/${postToken}`, { method: "POST", body: fd });
+              if (!res.ok) throw new Error("Upload failed");
+              const staged: StagedFile = await res.json();
+              setMediaFiles((prev) =>
+                prev.map((mf) => (mf.id === fileId ? { ...mf, staged, status: "done" } : mf))
+              );
+            } catch {
+              setMediaFiles((prev) =>
+                prev.map((mf) => (mf.id === fileId ? { ...mf, status: "upload failed" } : mf))
+              );
+            }
+          });
       }
     },
-    [setMediaFiles]
+    [setMediaFiles, postToken]
   );
 
   const removeFile = (id: number) => {
@@ -108,19 +131,24 @@ export function MediaUploader({ mediaFiles, setMediaFiles }: Props) {
               {mf.original.type.startsWith("image/") ? (
                 <img
                   src={URL.createObjectURL(mf.original)}
-                  className={`w-16 h-16 object-cover rounded ${mf.compressed ? "" : "opacity-50"}`}
+                  className={`w-16 h-16 object-cover rounded ${mf.staged ? "" : "opacity-50"}`}
                   alt=""
                 />
               ) : (
                 <div
-                  className={`w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500 ${mf.compressed ? "" : "opacity-50"}`}
+                  className={`w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500 ${mf.staged ? "" : "opacity-50"}`}
                 >
                   Video
                 </div>
               )}
-              {!mf.compressed && (
+              {!mf.staged && mf.status !== "upload failed" && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              {mf.status === "upload failed" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded">
+                  <span className="text-white text-xs">!</span>
                 </div>
               )}
               <button
@@ -134,10 +162,10 @@ export function MediaUploader({ mediaFiles, setMediaFiles }: Props) {
           ))}
         </div>
       )}
-      {mediaFiles.some((mf) => !mf.compressed) && (
+      {mediaFiles.some((mf) => !mf.staged && mf.status !== "upload failed") && (
         <p className="mt-2 text-xs text-blue-500">
-          {mediaFiles.find((mf) => !mf.compressed && mf.status !== "compressing")?.status ||
-            "Compressing..."}
+          {mediaFiles.find((mf) => !mf.staged && mf.status !== "compressing" && mf.status !== "uploading" && mf.status !== "upload failed")?.status ||
+            (mediaFiles.some((mf) => mf.status === "uploading") ? "Uploading..." : "Compressing...")}
         </p>
       )}
     </div>

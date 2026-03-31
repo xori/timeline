@@ -209,6 +209,10 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
     if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== postId));
   };
 
+  const handleEdit = (updatedPost: any) => {
+    setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -273,6 +277,8 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
               post={post}
               canDelete={!!user && post.user_id === user.id}
               onDelete={handleDelete}
+              postToken={user && post.user_id === user.id ? postToken : undefined}
+              onEdit={handleEdit}
               shareToken={effectiveViewToken || viewToken}
             />
           ))

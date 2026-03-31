@@ -18,6 +18,8 @@ import {
   addPushSubscription,
   removePushSubscription,
   getSubscriptionsForTimeline,
+  updatePost,
+  deleteMedia,
 } from "./db";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -104,6 +106,28 @@ const server = serve({
       },
     },
 
+    "/api/stage-upload/:postToken": {
+      async POST(req) {
+        const user = getUserByPostToken(req.params.postToken);
+        if (!user) return new Response("Unauthorized", { status: 401 });
+
+        const formData = await req.formData();
+        const file = formData.get("file") as File;
+        if (!file || file.size === 0) return new Response("No file", { status: 400 });
+
+        const ext = file.name.split(".").pop() || "bin";
+        const filename = `${crypto.randomUUID()}.${ext}`;
+        await Bun.write(join(UPLOADS_DIR, filename), file);
+
+        return Response.json({
+          filename,
+          original_name: file.name,
+          mime_type: file.type,
+          size_bytes: file.size,
+        });
+      },
+    },
+
     "/api/posts/:postToken": {
       async POST(req) {
         const user = getUserByPostToken(req.params.postToken);
@@ -111,20 +135,18 @@ const server = serve({
 
         const formData = await req.formData();
         const body = (formData.get("body") as string) || "";
-        const files = formData.getAll("files") as File[];
+        const stagedFiles = JSON.parse((formData.get("staged_files") as string) || "[]") as {
+          filename: string; original_name: string; mime_type: string; size_bytes: number;
+        }[];
 
-        if (!body.trim() && files.length === 0) {
+        if (!body.trim() && stagedFiles.length === 0) {
           return new Response("Empty post", { status: 400 });
         }
 
         const post = createPost(user.id, user.timeline_id, body);
 
-        for (const file of files) {
-          if (file.size === 0) continue;
-          const ext = file.name.split(".").pop() || "bin";
-          const filename = `${crypto.randomUUID()}.${ext}`;
-          await Bun.write(join(UPLOADS_DIR, filename), file);
-          createMedia(post.id, filename, file.name, file.type, file.size);
+        for (const sf of stagedFiles) {
+          createMedia(post.id, sf.filename, sf.original_name, sf.mime_type, sf.size_bytes);
         }
 
         // Fire-and-forget push notifications
@@ -132,7 +154,7 @@ const server = serve({
         if (subs.length > 0) {
           const notifBody = body.trim()
             ? `${user.name}: ${body.slice(0, 100)}${body.length > 100 ? "..." : ""}`
-            : `${user.name} shared ${files.length > 1 ? `${files.length} files` : files[0]?.type?.startsWith("video/") ? "a video" : "a photo"}`;
+            : `${user.name} shared ${stagedFiles.length > 1 ? `${stagedFiles.length} files` : stagedFiles[0]?.mime_type?.startsWith("video/") ? "a video" : "a photo"}`;
           const payload = JSON.stringify({
             title: user.timeline_name,
             body: notifBody,
@@ -163,6 +185,51 @@ const server = serve({
     },
 
     "/api/posts/:postToken/:postId": {
+      async PATCH(req) {
+        const user = getUserByPostToken(req.params.postToken);
+        if (!user) return new Response("Unauthorized", { status: 401 });
+
+        const postId = Number(req.params.postId);
+        const post = getPost(postId);
+        if (!post || post.user_id !== user.id) {
+          return new Response("Forbidden", { status: 403 });
+        }
+
+        const formData = await req.formData();
+        const body = (formData.get("body") as string) || "";
+        const removeMediaIds = formData.getAll("remove_media").map(Number).filter(Boolean);
+        const stagedFiles = JSON.parse((formData.get("staged_files") as string) || "[]") as {
+          filename: string; original_name: string; mime_type: string; size_bytes: number;
+        }[];
+
+        // Validate: must have body or remaining/new media
+        const existingMediaCount = getPostMedia(postId).length;
+        const remainingCount = existingMediaCount - removeMediaIds.length + stagedFiles.length;
+        if (!body.trim() && remainingCount <= 0) {
+          return new Response("Empty post", { status: 400 });
+        }
+
+        // Delete removed media files from disk and DB
+        for (const mediaId of removeMediaIds) {
+          const media = deleteMedia(mediaId, postId);
+          if (media) {
+            try {
+              const path = join(UPLOADS_DIR, media.filename);
+              const fs = await import("node:fs/promises");
+              await fs.unlink(path).catch(() => {});
+            } catch {}
+          }
+        }
+
+        // Link staged files to this post
+        for (const sf of stagedFiles) {
+          createMedia(postId, sf.filename, sf.original_name, sf.mime_type, sf.size_bytes);
+        }
+
+        updatePost(postId, user.id, body);
+        return Response.json({ post: getPost(postId), media: getPostMedia(postId) });
+      },
+
       async DELETE(req) {
         const user = getUserByPostToken(req.params.postToken);
         if (!user) return new Response("Unauthorized", { status: 401 });

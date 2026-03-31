@@ -114,6 +114,18 @@ export function createMedia(postId: number, filename: string, originalName: stri
   ).get(postId, filename, originalName, mimeType, sizeBytes) as any;
 }
 
+export function updatePost(postId: number, userId: number, body: string) {
+  return db.query(
+    "UPDATE posts SET body = ? WHERE id = ? AND user_id = ? RETURNING *"
+  ).get(body, postId, userId) as any;
+}
+
+export function deleteMedia(mediaId: number, postId: number) {
+  const media = db.query("SELECT filename FROM media WHERE id = ? AND post_id = ?").get(mediaId, postId) as any;
+  if (media) db.query("DELETE FROM media WHERE id = ? AND post_id = ?").run(mediaId, postId);
+  return media;
+}
+
 export function deletePost(postId: number, userId: number) {
   // Get media files before deleting
   const mediaFiles = db.query("SELECT filename FROM media WHERE post_id = ?").all(postId) as any[];
