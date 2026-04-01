@@ -1,10 +1,35 @@
-import React from "react";
+import React, { useRef, useEffect, useState } from "react";
 
 interface MediaItem {
   id: number;
   filename: string;
   original_name: string;
   mime_type: string;
+}
+
+function UpgradingImage({ thumbSrc, fullSrc, alt, className }: { thumbSrc: string; fullSrc: string; alt: string; className: string }) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [src, setSrc] = useState(thumbSrc);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img || thumbSrc === fullSrc) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const full = new Image();
+          full.src = fullSrc;
+          full.onload = () => setSrc(fullSrc);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [thumbSrc, fullSrc]);
+
+  return <img ref={imgRef} src={src} alt={alt} className={className} />;
 }
 
 export function MediaGallery({ media }: { media: MediaItem[] }) {
@@ -38,10 +63,10 @@ export function MediaGallery({ media }: { media: MediaItem[] }) {
                   popoverTarget={popoverId}
                   className="w-full cursor-pointer border-0 p-0 bg-transparent"
                 >
-                  <img
-                    src={thumbSrc}
+                  <UpgradingImage
+                    thumbSrc={thumbSrc}
+                    fullSrc={src}
                     alt={item.original_name}
-                    loading="lazy"
                     className={`w-full rounded-lg hover:opacity-90 transition-opacity ${isAlone ? "h-auto object-contain" : "aspect-square object-cover"}`}
                   />
                 </button>
