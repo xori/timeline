@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { compressImage, compressVideo, type ProgressCallback } from "../lib/compress";
 
 export interface StagedFile {
@@ -11,6 +11,7 @@ export interface StagedFile {
 export interface MediaFile {
   id: number;
   original: File;
+  previewUrl: string;
   compressed: File | null; // null = still compressing
   staged: StagedFile | null; // null = still uploading
   status: string; // "compressing", "uploading", progress text, "done", "upload failed"
@@ -48,6 +49,7 @@ export function MediaUploader({ mediaFiles, setMediaFiles, postToken }: Props) {
       const entries: MediaFile[] = accepted.map((f) => ({
         id: nextId++,
         original: f,
+        previewUrl: f.type.startsWith("image/") ? URL.createObjectURL(f) : "",
         compressed: null,
         staged: null,
         status: "compressing",
@@ -88,7 +90,11 @@ export function MediaUploader({ mediaFiles, setMediaFiles, postToken }: Props) {
   );
 
   const removeFile = (id: number) => {
-    setMediaFiles((prev) => prev.filter((mf) => mf.id !== id));
+    setMediaFiles((prev) => {
+      const removed = prev.find((mf) => mf.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((mf) => mf.id !== id);
+    });
   };
 
   return (
@@ -130,7 +136,7 @@ export function MediaUploader({ mediaFiles, setMediaFiles, postToken }: Props) {
             <div key={mf.id} className="relative">
               {mf.original.type.startsWith("image/") ? (
                 <img
-                  src={URL.createObjectURL(mf.original)}
+                  src={mf.previewUrl}
                   className={`w-16 h-16 object-cover rounded ${mf.staged ? "" : "opacity-50"}`}
                   alt=""
                 />

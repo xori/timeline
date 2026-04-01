@@ -75,15 +75,21 @@ export function PostCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const revokeMediaPreviews = (files: MediaFile[]) => {
+    files.forEach((mf) => { if (mf.previewUrl) URL.revokeObjectURL(mf.previewUrl); });
+  };
+
   const startEdit = () => {
     setEditBody(post.body);
     setExistingMedia(post.media || []);
     setRemovedMediaIds([]);
+    revokeMediaPreviews(newMediaFiles);
     setNewMediaFiles([]);
     setIsEditing(true);
   };
 
   const cancelEdit = () => {
+    revokeMediaPreviews(newMediaFiles);
     setIsEditing(false);
   };
 
@@ -116,6 +122,7 @@ export function PostCard({
 
       if (res.ok) {
         const data = await res.json();
+        revokeMediaPreviews(newMediaFiles);
         onEdit?.({ ...post, body: data.post.body, media: data.media });
         setIsEditing(false);
       }

@@ -35,6 +35,7 @@ export function PostForm({ postToken, userName, onPostCreated }: Props) {
 
       if (res.ok) {
         setBody("");
+        mediaFiles.forEach((mf) => { if (mf.previewUrl) URL.revokeObjectURL(mf.previewUrl); });
         setMediaFiles([]);
         onPostCreated();
       }
