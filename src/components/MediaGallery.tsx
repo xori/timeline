@@ -28,6 +28,7 @@ export function MediaGallery({ media }: { media: MediaItem[] }) {
         <div className={`grid gap-2 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
           {images.map((item, index) => {
             const src = `/uploads/${item.filename}`;
+            const thumbSrc = item.mime_type === "image/gif" ? src : `/thumbs/${item.filename}`;
             const popoverId = `media-popover-${item.id}`;
             const isAlone = images.length === 1 || (images.length % 2 === 1 && index === images.length - 1);
             return (
@@ -38,7 +39,7 @@ export function MediaGallery({ media }: { media: MediaItem[] }) {
                   className="w-full cursor-pointer border-0 p-0 bg-transparent"
                 >
                   <img
-                    src={src}
+                    src={thumbSrc}
                     alt={item.original_name}
                     loading="lazy"
                     className={`w-full rounded-lg hover:opacity-90 transition-opacity ${isAlone ? "h-auto object-contain" : "aspect-square object-cover"}`}

@@ -2,6 +2,7 @@ import { serve } from "bun";
 import { join, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import webpush from "web-push";
+import sharp from "sharp";
 import {
   getTimelineByViewToken,
   getUserByPostToken,
@@ -37,7 +38,40 @@ webpush.setVapidDetails(
 );
 
 const UPLOADS_DIR = join(import.meta.dir, "..", "data", "uploads");
+const THUMBS_DIR = join(import.meta.dir, "..", "data", "thumbs");
 mkdirSync(UPLOADS_DIR, { recursive: true });
+mkdirSync(THUMBS_DIR, { recursive: true });
+
+const THUMB_WIDTH = 200;
+const thumbLocks = new Map<string, Promise<string>>();
+
+async function getOrCreateThumb(filename: string): Promise<string | null> {
+  const thumbPath = join(THUMBS_DIR, filename);
+  if (await Bun.file(thumbPath).exists()) return thumbPath;
+
+  const origPath = join(UPLOADS_DIR, filename);
+  if (!(await Bun.file(origPath).exists())) return null;
+
+  // Deduplicate concurrent requests for the same thumbnail
+  if (thumbLocks.has(filename)) {
+    await thumbLocks.get(filename);
+    return thumbPath;
+  }
+
+  const promise = sharp(origPath)
+    .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
+    .jpeg({ quality: 60 })
+    .toFile(thumbPath)
+    .then(() => thumbPath);
+
+  thumbLocks.set(filename, promise);
+  try {
+    await promise;
+  } finally {
+    thumbLocks.delete(filename);
+  }
+  return thumbPath;
+}
 
 function escapeAttr(s: string) {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -277,6 +311,18 @@ const server = serve({
             headers: { "Content-Type": "text/javascript", ...cacheHeaders },
           });
         }
+      }
+      return new Response("Not found", { status: 404 });
+    },
+
+    "/thumbs/*": async (req) => {
+      const url = new URL(req.url);
+      const filename = url.pathname.replace("/thumbs/", "");
+      const thumbPath = await getOrCreateThumb(filename);
+      if (thumbPath) {
+        return new Response(Bun.file(thumbPath), {
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        });
       }
       return new Response("Not found", { status: 404 });
     },
