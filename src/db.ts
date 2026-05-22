@@ -44,6 +44,8 @@ db.run(`CREATE TABLE IF NOT EXISTS media (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
+try { db.run(`ALTER TABLE timelines ADD COLUMN done_at TEXT`); } catch {}
+
 db.run(`CREATE TABLE IF NOT EXISTS vapid_keys (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   public_key TEXT NOT NULL,
@@ -69,7 +71,7 @@ export function getTimelineByViewToken(viewToken: string) {
 
 export function getUserByPostToken(postToken: string) {
   return db.query(`
-    SELECT u.*, t.view_token, t.name as timeline_name
+    SELECT u.*, t.view_token, t.name as timeline_name, t.done_at as timeline_done_at
     FROM users u JOIN timelines t ON u.timeline_id = t.id
     WHERE u.post_token = ?
   `).get(postToken) as any;
@@ -156,6 +158,12 @@ export function getPostsUntilPost(timelineId: number, postId: number) {
       AND (p.created_at > ? OR (p.created_at = ? AND p.id >= ?))
     ORDER BY p.created_at DESC, p.id DESC
   `).all(timelineId, target.created_at, target.created_at, postId) as any[];
+}
+
+export function markTimelineDone(timelineId: number) {
+  return db.query(
+    "UPDATE timelines SET done_at = datetime('now') WHERE id = ? AND done_at IS NULL RETURNING *"
+  ).get(timelineId) as any;
 }
 
 export function createTimeline(name: string, viewToken: string) {

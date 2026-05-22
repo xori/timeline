@@ -21,6 +21,7 @@ import {
   getSubscriptionsForTimeline,
   updatePost,
   deleteMedia,
+  markTimelineDone,
 } from "./db";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -166,6 +167,8 @@ const server = serve({
       async POST(req) {
         const user = getUserByPostToken(req.params.postToken);
         if (!user) return new Response("Unauthorized", { status: 401 });
+
+        if (user.timeline_done_at) return new Response("Timeline is done", { status: 403 });
 
         const formData = await req.formData();
         const body = (formData.get("body") as string) || "";
@@ -367,6 +370,45 @@ const server = serve({
         const { endpoint } = await req.json();
         removePushSubscription(timeline.id, endpoint);
         return Response.json({ ok: true });
+      },
+    },
+
+    "/api/timeline/:postToken/done": {
+      async POST(req) {
+        const user = getUserByPostToken(req.params.postToken);
+        if (!user) return new Response("Unauthorized", { status: 401 });
+
+        const timeline = markTimelineDone(user.timeline_id);
+        if (!timeline) return Response.json({ already: true });
+
+        const { notify } = await req.json().catch(() => ({ notify: false }));
+        if (notify) {
+          const subs = getSubscriptionsForTimeline(user.timeline_id);
+          if (subs.length > 0) {
+            const payload = JSON.stringify({
+              title: user.timeline_name,
+              body: `${user.name} marked this timeline as done`,
+              tag: `timeline-${user.timeline_id}`,
+              url: `/t/${user.view_token}`,
+            });
+            Promise.allSettled(
+              subs.map((sub) =>
+                webpush
+                  .sendNotification(
+                    { endpoint: sub.endpoint, keys: { p256dh: sub.key_p256dh, auth: sub.key_auth } },
+                    payload,
+                  )
+                  .catch((err: any) => {
+                    if (err.statusCode === 410 || err.statusCode === 404) {
+                      removePushSubscription(user.timeline_id, sub.endpoint);
+                    }
+                  }),
+              ),
+            );
+          }
+        }
+
+        return Response.json({ done: true, done_at: timeline.done_at });
       },
     },
 

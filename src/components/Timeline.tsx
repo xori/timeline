@@ -19,6 +19,10 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [effectiveViewToken, setEffectiveViewToken] = useState(viewToken || "");
+  const [doneAt, setDoneAt] = useState<string | null>(null);
+  const [showDoneConfirm, setShowDoneConfirm] = useState(false);
+  const [notifyOnDone, setNotifyOnDone] = useState(false);
+  const [doneLoading, setDoneLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +75,7 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
       setPosts(data.posts);
       setNextCursor(data.nextCursor);
       if (!postToken) setTimelineName(data.timeline.name);
+      setDoneAt(data.timeline.done_at || null);
     } catch {
       setError("Failed to load timeline");
     } finally {
@@ -209,6 +214,27 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
     if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== postId));
   };
 
+  const handleMarkDone = async () => {
+    if (!postToken) return;
+    setDoneLoading(true);
+    try {
+      const res = await fetch(`/api/timeline/${postToken}/done`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify: notifyOnDone }),
+      });
+      const data = await res.json();
+      if (data.done_at || data.already) {
+        setDoneAt(data.done_at || new Date().toISOString());
+      }
+    } catch {
+    } finally {
+      setDoneLoading(false);
+      setShowDoneConfirm(false);
+      setNotifyOnDone(false);
+    }
+  };
+
   const handleEdit = (updatedPost: any) => {
     setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
   };
@@ -261,7 +287,51 @@ export function Timeline({ viewToken, postToken, focusPostId }: Props) {
         </div>
       </header>
       <main className="max-w-lg mx-auto px-4 py-6">
-        {postToken && user && (
+        {doneAt && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 text-center text-amber-800 text-sm">
+            This timeline was marked as done on{" "}
+            {new Date(doneAt + "Z").toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+          </div>
+        )}
+        {postToken && user && !doneAt && !showDoneConfirm && (
+          <button
+            onClick={() => setShowDoneConfirm(true)}
+            className="w-full mb-4 text-sm text-gray-400 hover:text-gray-600 py-2"
+          >
+            Mark timeline as done
+          </button>
+        )}
+        {showDoneConfirm && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+            <p className="text-sm text-gray-700 font-medium">Mark this timeline as done?</p>
+            <p className="text-xs text-gray-500">No more posts can be added after this.</p>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={notifyOnDone}
+                onChange={(e) => setNotifyOnDone(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Notify subscribers
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={handleMarkDone}
+                disabled={doneLoading}
+                className="px-4 py-1.5 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              >
+                {doneLoading ? "..." : "Confirm"}
+              </button>
+              <button
+                onClick={() => { setShowDoneConfirm(false); setNotifyOnDone(false); }}
+                className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {postToken && user && !doneAt && (
           <PostForm
             postToken={postToken}
             userName={user.name}
