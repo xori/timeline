@@ -1,20 +1,46 @@
-# bun-react-tailwind-template
+# Timeline
 
-To install dependencies:
+A shared photo and text timeline app for groups. Create a timeline, invite people with personal posting links, and everyone's updates appear on a single chronological feed — perfect for trips, events, or any shared experience.
+
+## Features
+
+- **Multi-user timelines** — each person gets a unique posting link, no accounts needed
+- **Photo and video uploads** — drag-and-drop media with client-side video compression via FFmpeg WASM
+- **Push notifications** — opt-in browser notifications when someone posts
+- **Markdown support** — posts render with full markdown formatting
+- **Lazy-loaded thumbnails** — server-generated thumbnails for fast initial loads, full images loaded on scroll
+- **Link previews** — shared post URLs include Open Graph meta tags
+- **Scrapbook export** — generate a printable HTML scrapbook from any timeline
+- **Mark as done** — close a timeline when the event is over, with optional subscriber notification
+
+## Tech stack
+
+[Bun](https://bun.sh) server with SQLite (`bun:sqlite`), React 19 frontend with Tailwind CSS, and Sharp for image processing.
+
+## Getting started
 
 ```bash
 bun install
 ```
 
-To start a development server:
+Create a timeline with one or more users:
+
+```bash
+bun seed <timeline-name> <user1> [user2] ...
+```
+
+This prints a **view URL** (read-only feed) and a **post URL** per user (lets them create posts).
+
+Start the dev server:
 
 ```bash
 bun dev
 ```
 
-To run for production:
+## Production
 
 ```bash
+bun run build
 bun start
 ```
 
@@ -26,16 +52,4 @@ Generate a printable landscape-oriented HTML scrapbook from a timeline's posts a
 bun src/scrapbook.ts <view-token>
 ```
 
-This outputs a self-contained HTML file (e.g. `japan-2026-scrapbook.html`) with all images embedded as base64. Open it in a browser and use Print (Ctrl/Cmd+P) to save as PDF or print. The layout adapts automatically based on content — photo-heavy posts get mosaic grids, text-only posts get journal columns, and posts with many photos span multiple pages.
-
-This project was created using `bun init` in bun v1.3.9. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
-
-
-Timeline: Japan
-  View: https://japan.verworn.ca/t/019d13b0-b3fc-7000-9324-6b61b01cc8c6
-  Evan post URL: https://japan.verworn.ca/p/019d13b0-b40b-7000-8735-4cf114a6b112
-  Gilian post URL: https://japan.verworn.ca/p/019d13b0-b40e-7000-9aa2-0db40c320d3d
-  Vivian post URL: https://japan.verworn.ca/p/019d13b0-b40f-7000-abae-7cf3f388ab75
-  Ron post URL: https://japan.verworn.ca/p/019d13b0-b414-7000-a8a3-c052732574b5
-  Jocelyne post URL: https://japan.verworn.ca/p/019d13b0-b416-7000-8e26-6e66dac5a282
-  Christi post URL: https://japan.verworn.ca/p/019d13b0-b418-7000-832d-755985bb5766
+Outputs a self-contained HTML file with all images embedded as base64. Open it in a browser and print to PDF. The layout adapts automatically — photo-heavy posts get mosaic grids, text-only posts get journal columns, and posts with many photos span multiple pages.
