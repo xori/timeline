@@ -18,6 +18,16 @@ To run for production:
 bun start
 ```
 
+## Scrapbook
+
+Generate a printable landscape-oriented HTML scrapbook from a timeline's posts and photos:
+
+```bash
+bun src/scrapbook.ts <view-token>
+```
+
+This outputs a self-contained HTML file (e.g. `japan-2026-scrapbook.html`) with all images embedded as base64. Open it in a browser and use Print (Ctrl/Cmd+P) to save as PDF or print. The layout adapts automatically based on content — photo-heavy posts get mosaic grids, text-only posts get journal columns, and posts with many photos span multiple pages.
+
 This project was created using `bun init` in bun v1.3.9. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
 
 
