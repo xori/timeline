@@ -2,6 +2,8 @@
 
 A shared photo and text timeline app for groups. Create a timeline, invite people with personal posting links, and everyone's updates appear on a single chronological feed — perfect for trips, events, or any shared experience.
 
+I always was annoyed at sending photos to 5 different chat groups while I was on a trip. Doubly so when I had limited bandwidth. Share a link, post there, everyone interested can follow along. Currently no social features (emoji / comments / etc).
+
 ## Features
 
 - **Multi-user timelines** — each person gets a unique posting link, no accounts needed
